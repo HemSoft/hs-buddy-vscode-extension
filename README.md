@@ -18,17 +18,37 @@
 
 ## 🚀 Features
 
-### Copilot Session Statistics *(coming soon)*
+### 1. Copilot Sessions *(in development)*
 
-Track and visualize your GitHub Copilot usage directly inside VS Code:
+Your Copilot companion in the status bar — track, browse, and understand your AI-assisted coding sessions.
 
-- **Session duration** — how long you've been pair-programming with Copilot
-- **Acceptance rate** — completions accepted vs. dismissed
-- **Lines generated** — Copilot-authored lines in the current session
-- **Language breakdown** — usage split by programming language
-- **Status bar indicator** — live session stats at a glance
+**Status Bar Indicator**
 
-> More features are on the way. HemSoft Buddy is designed as a growing suite of productivity tools that enhance your GitHub Copilot workflow.
+- HemSoft Buddy icon in the status bar showing current session status
+- Click to open the **Copilot Sessions menu** (Quick Pick) with actions:
+  - View current session details
+  - Browse session history
+  - Export session data
+  - Open settings
+
+**Current Session Tracking**
+
+- Session duration — how long you've been pair-programming with Copilot
+- Acceptance rate — completions accepted vs. dismissed
+- Lines generated — Copilot-authored lines in the current session
+- Language breakdown — usage split by programming language
+
+**Session History**
+
+- Browse past sessions by date
+- View trends and patterns over time
+- Compare session productivity
+
+---
+
+### Future Features
+
+> HemSoft Buddy is designed as a growing suite of productivity tools that enhance your GitHub Copilot workflow. More features will be documented here as they're planned.
 
 ---
 
@@ -36,7 +56,7 @@ Track and visualize your GitHub Copilot usage directly inside VS Code:
 
 | Command | Description |
 |---|---|
-| `HemSoft Buddy: Hello World` | Verify the extension is installed and running |
+| `HemSoft Buddy: Copilot Sessions` | Open the Copilot Sessions menu |
 
 *More commands will be added as features ship.*
 
@@ -52,9 +72,11 @@ Track and visualize your GitHub Copilot usage directly inside VS Code:
 ## 🗺️ Roadmap
 
 - [x] Initial scaffold and marketplace listing
-- [ ] Copilot Session Statistics — status bar widget
-- [ ] Copilot Session Statistics — detailed panel view
-- [ ] Session history and trends
+- [ ] Status bar icon with Quick Pick menu
+- [ ] Current session tracking
+- [ ] Session history browser
+- [ ] Detailed session panel view
+- [ ] Session export
 - [ ] *More to come…*
 
 ---
