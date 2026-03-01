@@ -32,10 +32,27 @@
     "session",
     "hemsoft"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
+    "icons": {
+      "hs-buddy-icon": {
+        "description": "HemSoft Buddy icon",
+        "default": {
+          "fontPath": "assets/fonts/hs-buddy-icons.woff2",
+          "fontCharacter": "\\EA01"
+        }
+      }
+    },
     "commands": [
+      {
+        "command": "hs-buddy.showMenu",
+        "title": "Copilot Sessions",
+        "category": "HemSoft Buddy",
+        "icon": "$(hs-buddy-icon)"
+      },
       {
         "command": "hs-buddy.helloWorld",
         "title": "Hello World",
@@ -53,14 +70,14 @@
     "package": "vsce package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "eslint": "^9.0.0",
-    "typescript": "^5.5.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.0",
-    "@vscode/vsce": "^3.0.0"
+    "@vscode/vsce": "^3.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.5.0"
   }
 }
