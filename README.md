@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" alt="Version" />
-  <a href="https://github.com/HemSoft/hs-buddy-vscode-extension/blob/main/LICENSE"><img src="https://img.shields.io/github/license/HemSoft/hs-buddy-vscode-extension?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/HemSoft/hs-buddy-vscode-extension/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/status-WIP-orange?style=flat-square" alt="Status" />
 </p>
 
