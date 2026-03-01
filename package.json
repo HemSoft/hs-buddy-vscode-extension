@@ -6,10 +6,6 @@
   "publisher": "HemSoft",
   "license": "MIT",
   "icon": "assets/hs-buddy-vscode-extension-icon.png",
-  "galleryBanner": {
-    "color": "#1a1a2e",
-    "theme": "dark"
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/HemSoft/hs-buddy-vscode-extension.git"
