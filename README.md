@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hs-buddy-vscode-extension-icon.png" alt="HemSoft Buddy Extension" width="256" />
+  <img src="assets/hs-buddy-vscode-extension-icon-transparent.png" alt="HemSoft Buddy Extension" width="256" />
 </p>
 
 <h1 align="center">HemSoft Buddy Extension</h1>
