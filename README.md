@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hs-buddy-vscode-extension-banner.png" alt="HemSoft Buddy Extension" width="100%" />
+  <img src="assets/hs-buddy-vscode-extension-icon.png" alt="HemSoft Buddy Extension" width="256" />
 </p>
 
 <h1 align="center">HemSoft Buddy Extension</h1>
@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=HemSoft.hs-buddy"><img src="https://img.shields.io/visual-studio-marketplace/v/HemSoft.hs-buddy?style=flat-square&color=blue" alt="Version" /></a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=HemSoft.hs-buddy"><img src="https://img.shields.io/visual-studio-marketplace/i/HemSoft.hs-buddy?style=flat-square&color=green" alt="Installs" /></a>
-  <a href="https://github.com/HemSoft/hs-buddy-vscode-extension/blob/main/LICENSE"><img src="https://img.shields.io/github/license/HemSoft/hs-buddy-vscode-extension?style=flat-square" alt="License" /></a>
+  <img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/status-WIP-orange?style=flat-square" alt="Status" />
 </p>
 
 ---
