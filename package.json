@@ -1,19 +1,40 @@
 {
   "name": "hs-buddy",
-  "displayName": "HemSoft Buddy",
-  "description": "A suite of productivity extensions for VS Code by HemSoft",
+  "displayName": "HemSoft Buddy Extension",
+  "description": "Productivity extension aiding the developer in working with GitHub Copilot.",
   "version": "0.1.0",
   "publisher": "HemSoft",
   "license": "MIT",
+  "icon": "assets/hs-buddy-vscode-extension-icon.png",
+  "galleryBanner": {
+    "color": "#1a1a2e",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/HemSoft/hs-buddy-vscode-extension"
+    "url": "https://github.com/HemSoft/hs-buddy-vscode-extension.git"
+  },
+  "homepage": "https://github.com/HemSoft/hs-buddy-vscode-extension#readme",
+  "bugs": {
+    "url": "https://github.com/HemSoft/hs-buddy-vscode-extension/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Programming Languages",
+    "Data Science",
+    "Machine Learning",
     "Other"
+  ],
+  "keywords": [
+    "copilot",
+    "github copilot",
+    "productivity",
+    "ai",
+    "statistics",
+    "session",
+    "hemsoft"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
