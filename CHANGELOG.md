@@ -9,10 +9,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - Current session stats in status bar, tooltip, and totals panel
-- ESLint flat config with typescript-eslint for code quality
+- Strict type-checked ESLint config (`strictTypeChecked` + `stylisticTypeChecked`)
 - Markdown linting with markdownlint-cli2
-- Husky pre-commit hooks enforcing lint and markdown checks
+- Husky pre-commit hooks with `tsc --noEmit` and lint-staged
 - lint-staged for efficient staged-file-only linting
+- Knip dead code detection with unused export and dependency tracking
+
+### Changed
+
+- Upgraded typescript-eslint from `recommended` to `strictTypeChecked` + `stylisticTypeChecked`
+- Typed all `JSON.parse` results with explicit interfaces to eliminate unsafe-any errors
+- Replaced `.match()` with `RegExp#exec()` per strict lint rules
+- Used nullish coalescing (`??=`) and optional chaining where appropriate
+
+### Removed
+
+- Dead code: unused exports (`enrichSessionsFromStore`, `getWorkspacePath`, `extractModelFromInteractiveSession`, `parseChatSessionFile`, `parseTranscriptFile`, `estimateTokensFromChars`)
+- Unused type interfaces (`SessionStoreEntry`, `InteractiveSessionEntry`, `ChatSessionParseResult`)
+- Unused devDependencies (`@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`)
 
 ## [0.1.0] - 2026-03-01
 

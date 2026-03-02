@@ -60,7 +60,7 @@ function parseRawEvent(raw: RawTranscriptEvent): ParsedEvent | null {
       const d = raw.data as {
         content?: string;
         reasoningText?: string;
-        toolRequests?: Array<{ toolCallId?: string; name?: string; arguments?: string }>;
+        toolRequests?: { toolCallId?: string; name?: string; arguments?: string }[];
       };
       const content = d.content ?? '';
       const reasoning = d.reasoningText ?? '';
@@ -164,7 +164,7 @@ function assembleSessionTurns(events: ParsedEvent[]): Turn[] {
             durationMs: evt.timestamp - start.timestamp,
             success: evt.success,
           };
-          currentTurn.toolCalls!.push(tc);
+          currentTurn.toolCalls?.push(tc);
           toolStartMap.delete(evt.toolCallId);
         }
         break;
@@ -201,7 +201,7 @@ function assembleSessionTurns(events: ParsedEvent[]): Turn[] {
 
 // ─── Session Parsing ──────────────────────────────────────
 
-export function parseTranscriptFile(filePath: string, workspaceHash: string): CopilotSession | null {
+function parseTranscriptFile(filePath: string, workspaceHash: string): CopilotSession | null {
   let content: string;
   try {
     content = fs.readFileSync(filePath, 'utf8');
@@ -218,7 +218,7 @@ export function parseTranscriptFile(filePath: string, workspaceHash: string): Co
   for (const line of lines) {
     let raw: RawTranscriptEvent;
     try {
-      raw = JSON.parse(line);
+      raw = JSON.parse(line) as RawTranscriptEvent;
     } catch {
       continue;
     }
@@ -382,7 +382,7 @@ export function parseTranscriptIncremental(
   for (let i = fromLineOffset; i < allLines.length; i++) {
     let raw: RawTranscriptEvent;
     try {
-      raw = JSON.parse(allLines[i]);
+      raw = JSON.parse(allLines[i]) as RawTranscriptEvent;
     } catch {
       continue;
     }

@@ -37,14 +37,6 @@ export async function estimateSessionTokens(session: CopilotSession): Promise<vo
   }
 }
 
-/**
- * Quick char-based token estimate (no API call).
- * Used for real-time status bar updates where speed matters.
- */
-export function estimateTokensFromChars(chars: number): number {
-  return Math.round(chars / CHARS_PER_TOKEN_FALLBACK);
-}
-
 /** Format token count for display */
 export function formatTokens(tokens: number): string {
   if (tokens >= 1_000_000) {

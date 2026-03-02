@@ -206,7 +206,7 @@ export class SessionTracker implements vscode.Disposable {
   }
 
   /** Start periodic scanning */
-  startPeriodicScan(intervalMinutes: number = 5): void {
+  startPeriodicScan(intervalMinutes = 5): void {
     if (this.scanTimer) {
       return;
     }
@@ -276,7 +276,7 @@ export class SessionTracker implements vscode.Disposable {
       lines.push(
         `\u25B6 Current Session`,
         `\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`,
-        `${cs.title || 'Untitled'}`,
+        cs.title || 'Untitled',
         `Model: ${csModel}`,
         `Prompts: ${cs.prompts} | Responses: ${cs.responses}`,
         `Tokens: ${formatTokens(csTokens)} (in: ${formatTokens(cs.promptTokens)} | out: ${formatTokens(cs.outputTokens)})`,
@@ -428,30 +428,28 @@ export class SessionTracker implements vscode.Disposable {
     }
 
     // Auto-associate with current session if it's the same file
-    if (!this.currentSession || this.currentSession.filePath !== filePath) {
+    if (this.currentSession?.filePath !== filePath) {
       // Different file being updated — switch to it if we don't have a current session
-      if (!this.currentSession) {
-        this.currentSession = {
-          sessionId: filePath,
-          title: '',
-          model: null,
-          startTime: Date.now(),
-          prompts: 0,
-          responses: 0,
-          promptTokens: 0,
-          outputTokens: 0,
-          toolCalls: 0,
-          durationMs: 0,
-          toolUsage: {},
-          filePath,
-        };
-      }
+      this.currentSession ??= {
+        sessionId: filePath,
+        title: '',
+        model: null,
+        startTime: Date.now(),
+        prompts: 0,
+        responses: 0,
+        promptTokens: 0,
+        outputTokens: 0,
+        toolCalls: 0,
+        durationMs: 0,
+        toolUsage: {},
+        filePath,
+      };
     }
 
     // Process title update
     if (increment.titleUpdate) {
       this.outputChannel.appendLine(`[Live] Title: ${increment.titleUpdate.substring(0, 50)}`);
-      if (this.currentSession?.filePath === filePath) {
+      if (this.currentSession.filePath === filePath) {
         this.currentSession.title = increment.titleUpdate;
       }
     }
@@ -460,7 +458,7 @@ export class SessionTracker implements vscode.Disposable {
     if (increment.newRequestCount > 0) {
       this.totals.totalPrompts += increment.newRequestCount;
       this.totals.totalTurns += increment.newRequestCount;
-      if (this.currentSession?.filePath === filePath) {
+      if (this.currentSession.filePath === filePath) {
         this.currentSession.prompts += increment.newRequestCount;
       }
       this.outputChannel.appendLine(`[Live] ${increment.newRequestCount} new request(s)`);
@@ -480,7 +478,7 @@ export class SessionTracker implements vscode.Disposable {
       this.totals.totalToolCallSuccesses += result.toolCallCount;
 
       // Update current session stats
-      if (this.currentSession?.filePath === filePath) {
+      if (this.currentSession.filePath === filePath) {
         this.currentSession.responses++;
         this.currentSession.promptTokens += result.promptTokens;
         this.currentSession.outputTokens += result.outputTokens;

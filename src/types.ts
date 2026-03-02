@@ -207,50 +207,6 @@ export interface SessionTotals {
   processedSessionIds: string[];
 }
 
-// ─── Session Store Entry (from workspace state.vscdb) ─────
-
-export interface SessionStoreEntry {
-  sessionId: string;
-  title: string;
-  lastMessageDate: number;
-  timing: {
-    created: number;
-    lastRequestStarted?: number;
-    lastRequestEnded?: number;
-  };
-  hasPendingEdits: boolean;
-  isEmpty: boolean;
-  isExternal: boolean;
-  stats?: {
-    fileCount: number;
-    added: number;
-    removed: number;
-  };
-  lastResponseState: number;
-}
-
-// ─── Interactive Session Memento (from workspace state.vscdb)
-
-export interface InteractiveSessionEntry {
-  inputText: string;
-  attachments: unknown[];
-  mode: { id: string; kind: string };
-  selectedModel?: {
-    identifier: string;
-    metadata: {
-      id: string;
-      vendor: string;
-      name: string;
-      family: string;
-      version: string;
-      multiplier: string;
-      multiplierNumeric: number;
-      maxInputTokens: number;
-      maxOutputTokens: number;
-    };
-  };
-}
-
 // ─── Current Session Stats (live tracking) ──────────────
 
 export interface CurrentSessionStats {

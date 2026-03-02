@@ -10,11 +10,11 @@ interface LineClass {
 }
 
 function classifyLine(line: string): LineClass | null {
-  const m = line.match(/^\{"kind":(\d+)/);
+  const m = /^\{"kind":(\d+)/.exec(line);
   if (!m) { return null; }
 
   const kind = parseInt(m[1]);
-  const km = line.match(/"k":\[([^\]]*)\]/);
+  const km = /"k":\[([^\]]*)\]/.exec(line);
   const keyPath = km ? parseKeyArray(km[1]) : [];
 
   return { kind, keyPath };
@@ -23,6 +23,53 @@ function classifyLine(line: string): LineClass | null {
 function parseKeyArray(raw: string): string[] {
   if (!raw.trim()) { return []; }
   return raw.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+}
+
+// ─── JSON Shape Interfaces ────────────────────────────────
+
+interface ToolCallEntry {
+  name?: string;
+}
+
+interface ToolCallRound {
+  toolCalls?: ToolCallEntry[];
+}
+
+interface ResultValue {
+  metadata?: {
+    promptTokens?: number;
+    outputTokens?: number;
+    toolCallRounds?: ToolCallRound[];
+  };
+  timings?: {
+    promptTokens?: number;
+    outputTokens?: number;
+    firstProgress?: number;
+    totalElapsed?: number;
+  };
+}
+
+interface SessionInitValue {
+  sessionId?: string;
+  creationDate?: number;
+  inputState?: {
+    selectedModel?: {
+      metadata?: {
+        id?: string;
+        name?: string;
+        family?: string;
+        vendor?: string;
+        multiplier?: string;
+        multiplierNumeric?: number;
+        maxInputTokens?: number;
+        maxOutputTokens?: number;
+      };
+    };
+  };
+}
+
+interface ChatSessionLine {
+  v?: unknown;
 }
 
 // ─── Result Data Extraction ───────────────────────────────
@@ -38,14 +85,14 @@ interface ResultData {
 
 function extractResultData(line: string): ResultData | null {
   try {
-    const parsed = JSON.parse(line);
-    const v = parsed.v;
+    const parsed = JSON.parse(line) as ChatSessionLine;
+    const v = parsed.v as ResultValue | undefined;
     if (!v) { return null; }
 
-    const promptTokens: number = v.metadata?.promptTokens ?? v.timings?.promptTokens ?? 0;
-    const outputTokens: number = v.metadata?.outputTokens ?? v.timings?.outputTokens ?? 0;
-    const firstProgressMs: number = v.timings?.firstProgress ?? 0;
-    const totalElapsedMs: number = v.timings?.totalElapsed ?? 0;
+    const promptTokens = v.metadata?.promptTokens ?? v.timings?.promptTokens ?? 0;
+    const outputTokens = v.metadata?.outputTokens ?? v.timings?.outputTokens ?? 0;
+    const firstProgressMs = v.timings?.firstProgress ?? 0;
+    const totalElapsedMs = v.timings?.totalElapsed ?? 0;
 
     let toolCallCount = 0;
     const toolNames = new Set<string>();
@@ -60,8 +107,8 @@ function extractResultData(line: string): ResultData | null {
     return { promptTokens, outputTokens, firstProgressMs, totalElapsedMs, toolCallCount, toolNames: [...toolNames] };
   } catch {
     // Fallback to regex for oversized lines
-    const pt = line.match(/"promptTokens":(\d+)/);
-    const ot = line.match(/"outputTokens":(\d+)/);
+    const pt = /"promptTokens":(\d+)/.exec(line);
+    const ot = /"outputTokens":(\d+)/.exec(line);
     if (!pt || !ot) { return null; }
     return {
       promptTokens: parseInt(pt[1]),
@@ -78,12 +125,12 @@ function extractResultData(line: string): ResultData | null {
 
 function extractSessionInit(line: string): { sessionId: string; creationDate: number; model: ModelInfo | null } | null {
   try {
-    const parsed = JSON.parse(line);
-    const v = parsed.v;
+    const parsed = JSON.parse(line) as ChatSessionLine;
+    const v = parsed.v as SessionInitValue | undefined;
     if (!v) { return null; }
 
-    const sessionId: string = v.sessionId ?? '';
-    const creationDate: number = v.creationDate ?? 0;
+    const sessionId = v.sessionId ?? '';
+    const creationDate = v.creationDate ?? 0;
 
     let model: ModelInfo | null = null;
     const sm = v.inputState?.selectedModel?.metadata;
@@ -102,8 +149,8 @@ function extractSessionInit(line: string): { sessionId: string; creationDate: nu
 
     return { sessionId, creationDate, model };
   } catch {
-    const sidMatch = line.match(/"sessionId":"([^"]+)"/);
-    const cdMatch = line.match(/"creationDate":(\d+)/);
+    const sidMatch = /"sessionId":"([^"]+)"/.exec(line);
+    const cdMatch = /"creationDate":(\d+)/.exec(line);
     return {
       sessionId: sidMatch?.[1] ?? '',
       creationDate: cdMatch ? parseInt(cdMatch[1]) : 0,
@@ -115,7 +162,7 @@ function extractSessionInit(line: string): { sessionId: string; creationDate: nu
 // ─── Title Extraction ─────────────────────────────────────
 
 function extractTitle(line: string): string | null {
-  const m = line.match(/"v":"((?:[^"\\]|\\.)*)"/);
+  const m = /"v":"((?:[^"\\]|\\.)*)"/.exec(line);
   return m ? m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\') : null;
 }
 
@@ -147,12 +194,12 @@ function processLine(line: string, increment: ChatSessionIncrement): void {
 
 // ─── Full File Parser ─────────────────────────────────────
 
-export interface ChatSessionParseResult {
+interface ChatSessionParseResult {
   session: CopilotSession | null;
   totalLines: number;
 }
 
-export function parseChatSessionFile(filePath: string, workspaceHash: string): ChatSessionParseResult {
+function parseChatSessionFile(filePath: string, workspaceHash: string): ChatSessionParseResult {
   let content: string;
   try {
     content = fs.readFileSync(filePath, 'utf8');

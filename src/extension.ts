@@ -84,7 +84,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  tracker?.dispose();
+  tracker.dispose();
 }
 
 function updateStatusBar(item: vscode.StatusBarItem): void {
