@@ -33,6 +33,7 @@ export class SessionTracker implements vscode.Disposable {
   ) {
     this.totals = this.loadTotals();
     this.recentSessions = this.loadRecentSessions();
+    this.migrateIfNeeded();
     this.disposables.push(this._onDidUpdate);
   }
 
@@ -406,6 +407,22 @@ export class SessionTracker implements vscode.Disposable {
 
   private loadRecentSessions(): CopilotSession[] {
     return this.globalState.get<CopilotSession[]>(SESSIONS_KEY) ?? [];
+  }
+
+  /**
+   * Detect totals persisted by an older version that lacks new fields.
+   * If sessions were tracked but turns/tokens are still 0, clear
+   * processedSessionIds to force a full rescan with the new parser.
+   */
+  private migrateIfNeeded(): void {
+    const t = this.totals;
+    if (t.processedSessionIds.length > 0 && t.totalTurns === 0 && t.totalEstimatedTotalTokens === 0) {
+      this.outputChannel.appendLine(
+        `[Tracker] Migrating ${t.processedSessionIds.length} sessions — clearing for full rescan with new data model.`
+      );
+      this.totals = createEmptyTotals();
+      this.recentSessions = [];
+    }
   }
 }
 
