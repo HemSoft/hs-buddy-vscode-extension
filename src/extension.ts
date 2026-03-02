@@ -99,6 +99,8 @@ async function showTotalsPanel(t: SessionTracker): Promise<void> {
     return;
   }
 
+  const hasRealTokens = totals.totalPromptTokens + totals.totalOutputTokens > 0;
+
   const lines = [
     `**Copilot Session Totals**`,
     ``,
@@ -108,18 +110,39 @@ async function showTotalsPanel(t: SessionTracker): Promise<void> {
     `| Turns | ${totals.totalTurns} |`,
     `| Prompts | ${totals.totalPrompts} |`,
     `| Responses | ${totals.totalResponses} |`,
-    `| Est. Tokens (total) | ~${formatTokens(totals.totalEstimatedTotalTokens)} |`,
-    `| Est. Tokens (input) | ~${formatTokens(totals.totalEstimatedInputTokens)} |`,
-    `| Est. Tokens (output) | ~${formatTokens(totals.totalEstimatedOutputTokens)} |`,
+  ];
+
+  if (hasRealTokens) {
+    lines.push(
+      `| Tokens (total) | ${formatTokens(totals.totalPromptTokens + totals.totalOutputTokens)} |`,
+      `| Tokens (input) | ${formatTokens(totals.totalPromptTokens)} |`,
+      `| Tokens (output) | ${formatTokens(totals.totalOutputTokens)} |`,
+    );
+  } else {
+    lines.push(
+      `| Est. Tokens (total) | ~${formatTokens(totals.totalEstimatedTotalTokens)} |`,
+      `| Est. Tokens (input) | ~${formatTokens(totals.totalEstimatedInputTokens)} |`,
+      `| Est. Tokens (output) | ~${formatTokens(totals.totalEstimatedOutputTokens)} |`,
+    );
+  }
+
+  lines.push(
     `| Tool Calls | ${totals.totalToolCalls} (${totals.totalToolCallSuccesses} ok / ${totals.totalToolCallFailures} fail) |`,
     `| Lines Added | +${totals.totalLinesAdded} |`,
     `| Lines Removed | -${totals.totalLinesRemoved} |`,
     `| Files Modified | ${totals.totalFilesModified} |`,
     ``,
-    `> *Token estimates based on visible transcript text (~4 chars/token).*`,
-    `> *Actual usage is higher — system prompts, file context, and tool results are not captured in transcripts.*`,
-    ``,
-  ];
+  );
+
+  if (hasRealTokens) {
+    lines.push(`> *Token counts from Copilot API usage data (chatSessions).*`);
+  } else {
+    lines.push(
+      `> *Token estimates based on visible transcript text (~4 chars/token).*`,
+      `> *Actual usage is higher — system prompts, file context, and tool results are not captured in transcripts.*`,
+    );
+  }
+  lines.push(``);
 
   // Model usage breakdown
   const modelEntries = Object.entries(totals.modelUsage).sort((a, b) => b[1] - a[1]);

@@ -29,9 +29,11 @@ export function findCopilotWorkspaces(vsCodeStoragePath: string): string[] {
   }
 
   for (const dir of dirs) {
-    const copilotDir = path.join(wsRoot, dir, 'GitHub.copilot-chat');
-    if (fs.existsSync(copilotDir)) {
-      result.push(path.join(wsRoot, dir));
+    const fullDir = path.join(wsRoot, dir);
+    const copilotDir = path.join(fullDir, 'GitHub.copilot-chat');
+    const chatSessionsDir = path.join(fullDir, 'chatSessions');
+    if (fs.existsSync(copilotDir) || fs.existsSync(chatSessionsDir)) {
+      result.push(fullDir);
     }
   }
 

@@ -1,16 +1,14 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { ParsedEvent } from './types';
-import { parseTranscriptIncremental } from './transcriptParser';
 import { findCopilotWorkspaces, getVSCodeStoragePath } from './storageReader';
 
-/** Poll interval for checking transcript changes (ms) */
+/** Poll interval for checking session file changes (ms) */
 const POLL_INTERVAL_MS = 2000;
 
 /**
- * Polls transcript directories for new/changed JSONL files
- * and emits parsed events in real time as Copilot writes them.
+ * Polls chatSessions/ and transcripts/ directories for new/changed JSONL files.
+ * Emits file change events — parsing is handled by the tracker.
  *
  * Uses polling instead of fs.watch for reliability on Windows.
  * Re-discovers workspace dirs each poll cycle so new workspaces
@@ -20,64 +18,43 @@ export class TranscriptWatcher implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private pollTimer: ReturnType<typeof setInterval> | undefined;
 
-  /** Tracks line offset and file size per file for change detection */
-  private readonly fileState = new Map<string, { size: number; lineOffset: number }>();
+  /** Tracks file sizes for change detection */
+  private readonly fileSizes = new Map<string, number>();
 
-  private readonly _onNewEvents = new vscode.EventEmitter<{
-    filePath: string;
-    sessionId: string;
-    events: ParsedEvent[];
-  }>();
-  readonly onNewEvents = this._onNewEvents.event;
-
-  private readonly _onNewFile = new vscode.EventEmitter<string>();
-  readonly onNewFile = this._onNewFile.event;
+  private readonly _onFileChanged = new vscode.EventEmitter<{ filePath: string; isNew: boolean }>();
+  readonly onFileChanged = this._onFileChanged.event;
 
   constructor(private readonly outputChannel: vscode.OutputChannel) {
-    this.disposables.push(this._onNewEvents, this._onNewFile);
+    this.disposables.push(this._onFileChanged);
   }
 
-  /**
-   * Start polling all transcript directories.
-   */
   start(): void {
-    // Run first poll immediately
     this.poll();
-    // Then poll every POLL_INTERVAL_MS
     this.pollTimer = setInterval(() => this.poll(), POLL_INTERVAL_MS);
-    this.outputChannel.appendLine(`[Watcher] Polling transcript dirs every ${POLL_INTERVAL_MS}ms.`);
+    this.outputChannel.appendLine(`[Watcher] Polling session dirs every ${POLL_INTERVAL_MS}ms.`);
   }
 
-  /**
-   * Single poll cycle: discover all transcript dirs and check for changes.
-   */
   private poll(): void {
     const storagePath = getVSCodeStoragePath();
-    if (!storagePath) {
-      return;
-    }
+    if (!storagePath) { return; }
 
     const workspaces = findCopilotWorkspaces(storagePath);
     for (const wsDir of workspaces) {
-      this.pollTranscriptDir(wsDir);
+      this.pollDirectory(path.join(wsDir, 'chatSessions'));
+      this.pollDirectory(path.join(wsDir, 'GitHub.copilot-chat', 'transcripts'));
     }
   }
 
-  private pollTranscriptDir(workspaceStoragePath: string): void {
-    const transcriptsDir = path.join(
-      workspaceStoragePath, 'GitHub.copilot-chat', 'transcripts'
-    );
-
+  private pollDirectory(dir: string): void {
     let files: string[];
     try {
-      files = fs.readdirSync(transcriptsDir).filter(f => f.endsWith('.jsonl'));
+      files = fs.readdirSync(dir).filter(f => f.endsWith('.jsonl'));
     } catch {
-      return; // Directory doesn't exist yet
+      return;
     }
 
     for (const file of files) {
-      const filePath = path.join(transcriptsDir, file);
-
+      const filePath = path.join(dir, file);
       let stat: fs.Stats;
       try {
         stat = fs.statSync(filePath);
@@ -85,46 +62,24 @@ export class TranscriptWatcher implements vscode.Disposable {
         continue;
       }
 
-      const known = this.fileState.get(filePath);
-
-      if (!known) {
-        // First time seeing this file — if not pre-marked, it's genuinely new
-        this._onNewFile.fire(filePath);
-        this.fileState.set(filePath, { size: stat.size, lineOffset: 0 });
-        this.processFileChanges(filePath);
-      } else if (stat.size > known.size) {
-        // File grew — process new lines
-        known.size = stat.size;
-        this.processFileChanges(filePath);
+      const known = this.fileSizes.get(filePath);
+      if (known === undefined) {
+        this.fileSizes.set(filePath, stat.size);
+        this._onFileChanged.fire({ filePath, isNew: true });
+      } else if (stat.size > known) {
+        this.fileSizes.set(filePath, stat.size);
+        this._onFileChanged.fire({ filePath, isNew: false });
       }
     }
   }
 
-  private processFileChanges(filePath: string): void {
-    const state = this.fileState.get(filePath);
-    const currentOffset = state?.lineOffset ?? 0;
-    const { events, newOffset } = parseTranscriptIncremental(filePath, currentOffset);
-
-    if (state) {
-      state.lineOffset = newOffset;
-    }
-
-    if (events.length > 0) {
-      const sessionId = path.basename(filePath, '.jsonl');
-      this._onNewEvents.fire({ filePath, sessionId, events });
-    }
-  }
-
   /**
-   * Mark a file as fully read up to its current size and line count.
-   * Called after initial scan to avoid re-emitting existing events.
+   * Mark a file's current size as known to prevent re-emitting for existing data.
    */
   markFileAsRead(filePath: string): void {
     try {
       const stat = fs.statSync(filePath);
-      const content = fs.readFileSync(filePath, 'utf8');
-      const lineCount = content.split('\n').filter(l => l.trim()).length;
-      this.fileState.set(filePath, { size: stat.size, lineOffset: lineCount });
+      this.fileSizes.set(filePath, stat.size);
     } catch {
       // Ignore
     }

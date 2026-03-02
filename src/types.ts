@@ -159,6 +159,13 @@ export interface CopilotSession {
   estimatedOutputTokens: number;
   estimatedTotalTokens: number;
 
+  // Real token counts (from chatSessions API data)
+  promptTokens: number;
+  outputTokens: number;
+
+  // Data source format
+  source: 'chatSessions' | 'transcripts';
+
   // Code stats (from session store enrichment)
   linesAdded: number;
   linesRemoved: number;
@@ -188,6 +195,8 @@ export interface SessionTotals {
   totalEstimatedInputTokens: number;
   totalEstimatedOutputTokens: number;
   totalEstimatedTotalTokens: number;
+  totalPromptTokens: number;
+  totalOutputTokens: number;
   totalLinesAdded: number;
   totalLinesRemoved: number;
   totalFilesModified: number;
@@ -240,4 +249,23 @@ export interface InteractiveSessionEntry {
       maxOutputTokens: number;
     };
   };
+}
+
+// ─── ChatSession Incremental Update ──────────────────────
+
+export interface ChatSessionIncrement {
+  sessionInit?: {
+    sessionId: string;
+    creationDate: number;
+    model: ModelInfo | null;
+  };
+  titleUpdate?: string;
+  completedResults: {
+    promptTokens: number;
+    outputTokens: number;
+    totalElapsedMs: number;
+    toolCallCount: number;
+    toolNames: string[];
+  }[];
+  newRequestCount: number;
 }

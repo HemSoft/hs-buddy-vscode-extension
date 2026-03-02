@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { CopilotSession, SessionTotals, ParsedEvent } from './types';
+import type { CopilotSession, SessionTotals } from './types';
 import { parseWorkspaceTranscripts } from './transcriptParser';
+import { parseChatSessionsInWorkspace, parseChatSessionIncremental } from './chatSessionParser';
+import { parseTranscriptIncremental } from './transcriptParser';
 import { findCopilotWorkspaces, getVSCodeStoragePath } from './storageReader';
 import { TranscriptWatcher } from './transcriptWatcher';
-import { estimateSessionTokens, estimateTokensFromChars, formatTokens } from './tokenEstimator';
+import { estimateSessionTokens, formatTokens } from './tokenEstimator';
 
 const TOTALS_KEY = 'hsBuddy.sessionTotals';
 const SESSIONS_KEY = 'hsBuddy.recentSessions';
@@ -21,8 +23,10 @@ export class SessionTracker implements vscode.Disposable {
   private watcher: TranscriptWatcher | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
-  /** Live session data from watcher (not yet fully parsed) */
-  private readonly liveSessionEvents = new Map<string, ParsedEvent[]>();
+  /** Byte offsets for incremental chatSession parsing */
+  private readonly chatSessionByteOffsets = new Map<string, number>();
+  /** Line offsets for incremental transcript parsing */
+  private readonly transcriptLineOffsets = new Map<string, number>();
 
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
   readonly onDidUpdate = this._onDidUpdate.event;
@@ -56,32 +60,49 @@ export class SessionTracker implements vscode.Disposable {
 
     const workspaces = findCopilotWorkspaces(storagePath);
     let newCount = 0;
-    const newSessions: CopilotSession[] = [];
 
+    // 1. Parse chatSessions files (current format — has real token counts)
     for (const wsDir of workspaces) {
-      const sessions = parseWorkspaceTranscripts(wsDir);
-      for (const session of sessions) {
+      const results = parseChatSessionsInWorkspace(wsDir);
+      for (const { session, filePath } of results) {
         if (!this.totals.processedSessionIds.includes(session.sessionId)) {
-          newSessions.push(session);
+          this.addSession(session);
           newCount++;
+
+          // Set up byte offset for incremental parsing
+          try {
+            const stat = fs.statSync(filePath);
+            this.chatSessionByteOffsets.set(filePath, stat.size);
+          } catch { /* ignore */ }
+
+          // Mark in watcher so it won't re-emit for existing content
+          this.watcher?.markFileAsRead(filePath);
         }
       }
     }
 
-    // Estimate tokens for new sessions (batch, using LM API if available)
-    for (const session of newSessions) {
-      await estimateSessionTokens(session);
-      this.addSession(session);
+    // 2. Parse old transcripts files (legacy format — 2 workspace hashes)
+    for (const wsDir of workspaces) {
+      const sessions = parseWorkspaceTranscripts(wsDir);
+      for (const session of sessions) {
+        if (!this.totals.processedSessionIds.includes(session.sessionId)) {
+          await estimateSessionTokens(session);
+          this.addSession(session);
+          newCount++;
 
-      // Mark file as read so watcher doesn't re-emit
-      if (this.watcher) {
-        const storagePath2 = getVSCodeStoragePath();
-        if (storagePath2) {
           const transcriptPath = path.join(
-            storagePath2, 'workspaceStorage', session.workspaceHash,
-            'GitHub.copilot-chat', 'transcripts', `${session.sessionId}.jsonl`
+            wsDir, 'GitHub.copilot-chat', 'transcripts', `${session.sessionId}.jsonl`
           );
-          this.watcher.markFileAsRead(transcriptPath);
+          this.watcher?.markFileAsRead(transcriptPath);
+
+          // Set line offset for incremental parsing
+          try {
+            const content = fs.readFileSync(transcriptPath, 'utf8');
+            this.transcriptLineOffsets.set(
+              transcriptPath,
+              content.split('\n').filter(l => l.trim()).length
+            );
+          } catch { /* ignore */ }
         }
       }
     }
@@ -103,12 +124,8 @@ export class SessionTracker implements vscode.Disposable {
 
     this.watcher = new TranscriptWatcher(this.outputChannel);
 
-    this.watcher.onNewEvents(({ sessionId, events }) => {
-      this.handleLiveEvents(sessionId, events);
-    });
-
-    this.watcher.onNewFile(filePath => {
-      this.outputChannel.appendLine(`[Tracker] New transcript file: ${path.basename(filePath)}`);
+    this.watcher.onFileChanged(({ filePath, isNew }) => {
+      this.handleFileChanged(filePath, isNew);
     });
 
     // Mark all existing files as read before starting
@@ -116,15 +133,33 @@ export class SessionTracker implements vscode.Disposable {
     if (storagePath) {
       const workspaces = findCopilotWorkspaces(storagePath);
       for (const wsDir of workspaces) {
+        // chatSessions files
+        const chatDir = path.join(wsDir, 'chatSessions');
+        try {
+          for (const file of fs.readdirSync(chatDir).filter((f: string) => f.endsWith('.jsonl'))) {
+            const fp = path.join(chatDir, file);
+            this.watcher.markFileAsRead(fp);
+            // Set byte offset to current file size
+            try {
+              const stat = fs.statSync(fp);
+              this.chatSessionByteOffsets.set(fp, stat.size);
+            } catch { /* ignore */ }
+          }
+        } catch { /* dir may not exist */ }
+
+        // Legacy transcripts files
         const transcriptsDir = path.join(wsDir, 'GitHub.copilot-chat', 'transcripts');
         try {
-          const files = fs.readdirSync(transcriptsDir).filter((f: string) => f.endsWith('.jsonl'));
-          for (const file of files) {
-            this.watcher.markFileAsRead(path.join(transcriptsDir, file));
+          for (const file of fs.readdirSync(transcriptsDir).filter((f: string) => f.endsWith('.jsonl'))) {
+            const fp = path.join(transcriptsDir, file);
+            this.watcher.markFileAsRead(fp);
+            // Set line offset to current line count
+            try {
+              const content = fs.readFileSync(fp, 'utf8');
+              this.transcriptLineOffsets.set(fp, content.split('\n').filter(l => l.trim()).length);
+            } catch { /* ignore */ }
           }
-        } catch {
-          // Directory may not exist
-        }
+        } catch { /* dir may not exist */ }
       }
     }
 
@@ -155,7 +190,8 @@ export class SessionTracker implements vscode.Disposable {
   async reset(): Promise<void> {
     this.totals = createEmptyTotals();
     this.recentSessions = [];
-    this.liveSessionEvents.clear();
+    this.chatSessionByteOffsets.clear();
+    this.transcriptLineOffsets.clear();
     await this.persist();
     this._onDidUpdate.fire();
   }
@@ -166,7 +202,11 @@ export class SessionTracker implements vscode.Disposable {
     if (t.totalSessions === 0) {
       return '$(hs-buddy-icon) No sessions';
     }
-    return `$(hs-buddy-icon) ${t.totalSessions} sessions | ~${formatTokens(t.totalEstimatedTotalTokens)} tokens`;
+    // Prefer real token counts, fall back to estimated
+    const totalTokens = t.totalPromptTokens + t.totalOutputTokens > 0
+      ? t.totalPromptTokens + t.totalOutputTokens
+      : t.totalEstimatedTotalTokens;
+    return `$(hs-buddy-icon) ${t.totalSessions} sessions | ${formatTokens(totalTokens)} tokens`;
   }
 
   /** Status bar tooltip */
@@ -179,17 +219,26 @@ export class SessionTracker implements vscode.Disposable {
     const duration = formatDuration(t.totalDuration);
     const topModel = getTopEntry(t.modelUsage);
     const topTool = getTopEntry(t.toolUsage);
+    const hasRealTokens = t.totalPromptTokens + t.totalOutputTokens > 0;
 
     const lines = [
       `HemSoft Buddy \u2014 Copilot Sessions`,
       `\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`,
       `Sessions: ${t.totalSessions} | Turns: ${t.totalTurns}`,
       `Prompts: ${t.totalPrompts} | Responses: ${t.totalResponses}`,
-      `Est. Tokens: ~${formatTokens(t.totalEstimatedTotalTokens)} (in: ~${formatTokens(t.totalEstimatedInputTokens)} | out: ~${formatTokens(t.totalEstimatedOutputTokens)})`,
+    ];
+
+    if (hasRealTokens) {
+      lines.push(`Tokens: ${formatTokens(t.totalPromptTokens + t.totalOutputTokens)} (in: ${formatTokens(t.totalPromptTokens)} | out: ${formatTokens(t.totalOutputTokens)})`);
+    } else {
+      lines.push(`Est. Tokens: ~${formatTokens(t.totalEstimatedTotalTokens)} (in: ~${formatTokens(t.totalEstimatedInputTokens)} | out: ~${formatTokens(t.totalEstimatedOutputTokens)})`);
+    }
+
+    lines.push(
       `Tool Calls: ${t.totalToolCalls} (${t.totalToolCallSuccesses} ok / ${t.totalToolCallFailures} fail)`,
       `Code: +${t.totalLinesAdded} / -${t.totalLinesRemoved} (${t.totalFilesModified} files)`,
       `Duration: ${duration}`,
-    ];
+    );
 
     if (topModel) {
       lines.push(`Top Model: ${topModel}`);
@@ -222,9 +271,12 @@ export class SessionTracker implements vscode.Disposable {
         const toolInfo = s.toolCallCount > 0
           ? `${s.toolCallCount} tools (${s.toolCallSuccessCount}/${s.toolCallFailureCount})`
           : 'no tools';
+        const tokens = s.promptTokens + s.outputTokens > 0
+          ? formatTokens(s.promptTokens + s.outputTokens)
+          : `~${formatTokens(s.estimatedTotalTokens)}`;
         return {
           label: `$(comment-discussion) ${s.title || 'Untitled'}`,
-          description: `${model} \u00B7 ${s.promptCount}p ${s.turnCount}t \u00B7 ${toolInfo} \u00B7 ~${formatTokens(s.estimatedTotalTokens)} tok`,
+          description: `${model} \u00B7 ${s.promptCount}p ${s.turnCount}t \u00B7 ${toolInfo} \u00B7 ${tokens} tok`,
           detail: `${date} ${time} \u00B7 ${duration} \u00B7 +${s.linesAdded}/-${s.linesRemoved} lines`,
         };
       });
@@ -258,92 +310,119 @@ export class SessionTracker implements vscode.Disposable {
 
   // ─── Private ──────────────────────────────────────────
 
-  private handleLiveEvents(sessionId: string, events: ParsedEvent[]): void {
-    // Accumulate events for the session
-    const existing = this.liveSessionEvents.get(sessionId) ?? [];
-    existing.push(...events);
-    this.liveSessionEvents.set(sessionId, existing);
+  private handleFileChanged(filePath: string, isNew: boolean): void {
+    if (isNew) {
+      this.outputChannel.appendLine(`[Tracker] New session file: ${path.basename(filePath)}`);
+    }
 
-    // Log notable events
-    for (const evt of events) {
-      switch (evt.type) {
-        case 'session.start':
-          this.outputChannel.appendLine(`[Live] Session started: ${sessionId}`);
-          break;
-        case 'user.message':
-          this.outputChannel.appendLine(`[Live] User prompt in ${sessionId.substring(0, 8)}...`);
-          break;
-        case 'tool.execution_start':
-          this.outputChannel.appendLine(`[Live] Tool: ${evt.toolName} in ${sessionId.substring(0, 8)}...`);
-          break;
-        case 'tool.execution_complete':
-          this.outputChannel.appendLine(`[Live] Tool done: ${evt.success ? 'ok' : 'FAIL'} in ${sessionId.substring(0, 8)}...`);
-          break;
-        case 'assistant.turn_end':
-          this.outputChannel.appendLine(`[Live] Turn ended in ${sessionId.substring(0, 8)}...`);
-          break;
+    if (filePath.includes(`${path.sep}chatSessions${path.sep}`)) {
+      this.handleChatSessionFileChange(filePath);
+    } else if (filePath.includes(`${path.sep}transcripts${path.sep}`)) {
+      this.handleTranscriptFileChange(filePath);
+    }
+  }
+
+  private handleChatSessionFileChange(filePath: string): void {
+    const byteOffset = this.chatSessionByteOffsets.get(filePath) ?? 0;
+    const { increment, newByteOffset } = parseChatSessionIncremental(filePath, byteOffset);
+    this.chatSessionByteOffsets.set(filePath, newByteOffset);
+
+    // Process session init
+    if (increment.sessionInit) {
+      const sid = increment.sessionInit.sessionId;
+      if (sid && !this.totals.processedSessionIds.includes(sid)) {
+        this.totals.totalSessions++;
+        this.totals.processedSessionIds.push(sid);
+        this.outputChannel.appendLine(`[Live] Session started: ${sid.substring(0, 8)}...`);
+
+        if (increment.sessionInit.model) {
+          const key = increment.sessionInit.model.family;
+          this.totals.modelUsage[key] = (this.totals.modelUsage[key] ?? 0) + 1;
+        }
       }
     }
 
-    // Update live counters for status bar (fast, no LM API call)
-    this.updateLiveCounters(events);
-    this._onDidUpdate.fire();
+    // Process title update
+    if (increment.titleUpdate) {
+      this.outputChannel.appendLine(`[Live] Title: ${increment.titleUpdate.substring(0, 50)}`);
+    }
+
+    // Process new requests (user prompts)
+    if (increment.newRequestCount > 0) {
+      this.totals.totalPrompts += increment.newRequestCount;
+      this.totals.totalTurns += increment.newRequestCount;
+      this.outputChannel.appendLine(`[Live] ${increment.newRequestCount} new request(s)`);
+    }
+
+    // Process completed results with real token counts
+    for (const result of increment.completedResults) {
+      this.totals.totalResponses++;
+      this.totals.totalPromptTokens += result.promptTokens;
+      this.totals.totalOutputTokens += result.outputTokens;
+      this.totals.totalToolCalls += result.toolCallCount;
+      this.totals.totalDuration += result.totalElapsedMs;
+
+      for (const name of result.toolNames) {
+        this.totals.toolUsage[name] = (this.totals.toolUsage[name] ?? 0) + 1;
+      }
+      this.totals.totalToolCallSuccesses += result.toolCallCount;
+
+      this.outputChannel.appendLine(
+        `[Live] Result: ${result.promptTokens} prompt + ${result.outputTokens} output tokens, ${result.toolCallCount} tool calls, ${(result.totalElapsedMs / 1000).toFixed(1)}s`
+      );
+    }
+
+    if (increment.newRequestCount > 0 || increment.completedResults.length > 0) {
+      void this.persist();
+      this._onDidUpdate.fire();
+    }
   }
 
-  private updateLiveCounters(events: ParsedEvent[]): void {
+  private handleTranscriptFileChange(filePath: string): void {
+    const lineOffset = this.transcriptLineOffsets.get(filePath) ?? 0;
+    const { events, newOffset } = parseTranscriptIncremental(filePath, lineOffset);
+    this.transcriptLineOffsets.set(filePath, newOffset);
+
+    if (events.length === 0) { return; }
+
+    const sessionId = path.basename(filePath, '.jsonl');
+
     for (const evt of events) {
       switch (evt.type) {
+        case 'session.start':
+          if (!this.totals.processedSessionIds.includes(evt.sessionId)) {
+            this.totals.totalSessions++;
+            this.totals.processedSessionIds.push(evt.sessionId);
+          }
+          this.outputChannel.appendLine(`[Live] Transcript session: ${sessionId.substring(0, 8)}...`);
+          break;
         case 'user.message':
           this.totals.totalPrompts++;
           this.totals.totalInputChars += evt.contentLength;
-          this.totals.totalEstimatedInputTokens += estimateTokensFromChars(evt.contentLength);
-          this.totals.totalEstimatedTotalTokens += estimateTokensFromChars(evt.contentLength);
           break;
-
+        case 'assistant.turn_start':
+          this.totals.totalTurns++;
+          break;
         case 'assistant.message':
           this.totals.totalResponses++;
           this.totals.totalOutputChars += evt.contentLength;
           this.totals.totalReasoningChars += evt.reasoningLength;
-          this.totals.totalToolArgChars += evt.toolRequests.reduce((s, r) => s + r.argumentsLength, 0);
-          {
-            const outChars = evt.contentLength + evt.reasoningLength +
-              evt.toolRequests.reduce((s, r) => s + r.argumentsLength, 0);
-            this.totals.totalEstimatedOutputTokens += estimateTokensFromChars(outChars);
-            this.totals.totalEstimatedTotalTokens += estimateTokensFromChars(outChars);
-          }
           break;
-
-        case 'assistant.turn_start':
-          this.totals.totalTurns++;
-          break;
-
         case 'tool.execution_start':
           this.totals.totalToolCalls++;
           if (evt.toolName) {
             this.totals.toolUsage[evt.toolName] = (this.totals.toolUsage[evt.toolName] ?? 0) + 1;
           }
           break;
-
         case 'tool.execution_complete':
-          if (evt.success) {
-            this.totals.totalToolCallSuccesses++;
-          } else {
-            this.totals.totalToolCallFailures++;
-          }
-          break;
-
-        case 'session.start':
-          // Only count as new session if not already processed
-          if (!this.totals.processedSessionIds.includes(evt.sessionId)) {
-            this.totals.totalSessions++;
-            this.totals.processedSessionIds.push(evt.sessionId);
-          }
+          if (evt.success) { this.totals.totalToolCallSuccesses++; }
+          else { this.totals.totalToolCallFailures++; }
           break;
       }
     }
 
-    // Debounce persist
     void this.persist();
+    this._onDidUpdate.fire();
   }
 
   private addSession(session: CopilotSession): void {
@@ -361,6 +440,8 @@ export class SessionTracker implements vscode.Disposable {
     this.totals.totalEstimatedInputTokens += session.estimatedInputTokens;
     this.totals.totalEstimatedOutputTokens += session.estimatedOutputTokens;
     this.totals.totalEstimatedTotalTokens += session.estimatedTotalTokens;
+    this.totals.totalPromptTokens += session.promptTokens;
+    this.totals.totalOutputTokens += session.outputTokens;
     this.totals.totalLinesAdded += session.linesAdded;
     this.totals.totalLinesRemoved += session.linesRemoved;
     this.totals.totalFilesModified += session.filesModified;
@@ -444,6 +525,8 @@ function createEmptyTotals(): SessionTotals {
     totalEstimatedInputTokens: 0,
     totalEstimatedOutputTokens: 0,
     totalEstimatedTotalTokens: 0,
+    totalPromptTokens: 0,
+    totalOutputTokens: 0,
     totalLinesAdded: 0,
     totalLinesRemoved: 0,
     totalFilesModified: 0,
