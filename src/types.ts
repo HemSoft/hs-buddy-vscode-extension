@@ -251,6 +251,23 @@ export interface InteractiveSessionEntry {
   };
 }
 
+// ─── Current Session Stats (live tracking) ──────────────
+
+export interface CurrentSessionStats {
+  sessionId: string;
+  title: string;
+  model: ModelInfo | null;
+  startTime: number;
+  prompts: number;
+  responses: number;
+  promptTokens: number;
+  outputTokens: number;
+  toolCalls: number;
+  durationMs: number;
+  toolUsage: Record<string, number>;
+  filePath: string;
+}
+
 // ─── ChatSession Incremental Update ──────────────────────
 
 export interface ChatSessionIncrement {

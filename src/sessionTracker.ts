@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { CopilotSession, SessionTotals } from './types';
+import type { CopilotSession, SessionTotals, CurrentSessionStats } from './types';
 import { parseWorkspaceTranscripts } from './transcriptParser';
 import { parseChatSessionsInWorkspace, parseChatSessionIncremental } from './chatSessionParser';
 import { parseTranscriptIncremental } from './transcriptParser';
@@ -28,6 +28,9 @@ export class SessionTracker implements vscode.Disposable {
   /** Line offsets for incremental transcript parsing */
   private readonly transcriptLineOffsets = new Map<string, number>();
 
+  /** Current active session stats (the most recently updated chatSession) */
+  private currentSession: CurrentSessionStats | null = null;
+
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
   readonly onDidUpdate = this._onDidUpdate.event;
 
@@ -46,6 +49,11 @@ export class SessionTracker implements vscode.Disposable {
     return this.totals;
   }
 
+  /** Current active session stats */
+  getCurrentSession(): CurrentSessionStats | null {
+    return this.currentSession;
+  }
+
   /** Most recent sessions (up to MAX_RECENT_SESSIONS) */
   getRecentSessions(): CopilotSession[] {
     return this.recentSessions;
@@ -62,6 +70,8 @@ export class SessionTracker implements vscode.Disposable {
     let newCount = 0;
 
     // 1. Parse chatSessions files (current format — has real token counts)
+    let latestSession: { session: CopilotSession; filePath: string } | null = null;
+
     for (const wsDir of workspaces) {
       const results = parseChatSessionsInWorkspace(wsDir);
       for (const { session, filePath } of results) {
@@ -78,6 +88,33 @@ export class SessionTracker implements vscode.Disposable {
           // Mark in watcher so it won't re-emit for existing content
           this.watcher?.markFileAsRead(filePath);
         }
+
+        // Track the most recent session for current session display
+        if (!latestSession || session.startTime > latestSession.session.startTime) {
+          latestSession = { session, filePath };
+        }
+      }
+    }
+
+    // Set the most recent chatSession as the current session
+    if (latestSession) {
+      const s = latestSession.session;
+      this.currentSession = {
+        sessionId: s.sessionId,
+        title: s.title,
+        model: s.model,
+        startTime: s.startTime,
+        prompts: s.promptCount,
+        responses: s.responseCount,
+        promptTokens: s.promptTokens,
+        outputTokens: s.outputTokens,
+        toolCalls: s.toolCallCount,
+        durationMs: s.durationMs,
+        toolUsage: {},
+        filePath: latestSession.filePath,
+      };
+      for (const tool of s.toolsUsed) {
+        this.currentSession.toolUsage[tool] = (this.currentSession.toolUsage[tool] ?? 0) + 1;
       }
     }
 
@@ -192,6 +229,7 @@ export class SessionTracker implements vscode.Disposable {
     this.recentSessions = [];
     this.chatSessionByteOffsets.clear();
     this.transcriptLineOffsets.clear();
+    this.currentSession = null;
     await this.persist();
     this._onDidUpdate.fire();
   }
@@ -201,6 +239,11 @@ export class SessionTracker implements vscode.Disposable {
     const t = this.totals;
     if (t.totalSessions === 0) {
       return '$(hs-buddy-icon) No sessions';
+    }
+    const cs = this.currentSession;
+    if (cs) {
+      const csTokens = cs.promptTokens + cs.outputTokens;
+      return `$(hs-buddy-icon) ${cs.prompts}p ${formatTokens(csTokens)} tok | All: ${t.totalSessions} sessions`;
     }
     // Prefer real token counts, fall back to estimated
     const totalTokens = t.totalPromptTokens + t.totalOutputTokens > 0
@@ -221,12 +264,38 @@ export class SessionTracker implements vscode.Disposable {
     const topTool = getTopEntry(t.toolUsage);
     const hasRealTokens = t.totalPromptTokens + t.totalOutputTokens > 0;
 
-    const lines = [
-      `HemSoft Buddy \u2014 Copilot Sessions`,
+    const lines: string[] = [];
+
+    // Current session section
+    const cs = this.currentSession;
+    if (cs) {
+      const csTokens = cs.promptTokens + cs.outputTokens;
+      const csDur = formatDuration(cs.durationMs);
+      const csModel = cs.model?.name ?? 'Unknown';
+      const csTopTool = getTopEntry(cs.toolUsage);
+      lines.push(
+        `\u25B6 Current Session`,
+        `\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`,
+        `${cs.title || 'Untitled'}`,
+        `Model: ${csModel}`,
+        `Prompts: ${cs.prompts} | Responses: ${cs.responses}`,
+        `Tokens: ${formatTokens(csTokens)} (in: ${formatTokens(cs.promptTokens)} | out: ${formatTokens(cs.outputTokens)})`,
+        `Tool Calls: ${cs.toolCalls}`,
+        `Duration: ${csDur}`,
+      );
+      if (csTopTool) {
+        lines.push(`Top Tool: ${csTopTool}`);
+      }
+      lines.push(``, `\u25A0 All Sessions`);
+    } else {
+      lines.push(`HemSoft Buddy \u2014 Copilot Sessions`);
+    }
+
+    lines.push(
       `\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`,
       `Sessions: ${t.totalSessions} | Turns: ${t.totalTurns}`,
       `Prompts: ${t.totalPrompts} | Responses: ${t.totalResponses}`,
-    ];
+    );
 
     if (hasRealTokens) {
       lines.push(`Tokens: ${formatTokens(t.totalPromptTokens + t.totalOutputTokens)} (in: ${formatTokens(t.totalPromptTokens)} | out: ${formatTokens(t.totalOutputTokens)})`);
@@ -340,17 +409,60 @@ export class SessionTracker implements vscode.Disposable {
           this.totals.modelUsage[key] = (this.totals.modelUsage[key] ?? 0) + 1;
         }
       }
+
+      // Initialize or switch current session
+      this.currentSession = {
+        sessionId: sid,
+        title: '',
+        model: increment.sessionInit.model,
+        startTime: increment.sessionInit.creationDate,
+        prompts: 0,
+        responses: 0,
+        promptTokens: 0,
+        outputTokens: 0,
+        toolCalls: 0,
+        durationMs: 0,
+        toolUsage: {},
+        filePath,
+      };
+    }
+
+    // Auto-associate with current session if it's the same file
+    if (!this.currentSession || this.currentSession.filePath !== filePath) {
+      // Different file being updated — switch to it if we don't have a current session
+      if (!this.currentSession) {
+        this.currentSession = {
+          sessionId: filePath,
+          title: '',
+          model: null,
+          startTime: Date.now(),
+          prompts: 0,
+          responses: 0,
+          promptTokens: 0,
+          outputTokens: 0,
+          toolCalls: 0,
+          durationMs: 0,
+          toolUsage: {},
+          filePath,
+        };
+      }
     }
 
     // Process title update
     if (increment.titleUpdate) {
       this.outputChannel.appendLine(`[Live] Title: ${increment.titleUpdate.substring(0, 50)}`);
+      if (this.currentSession?.filePath === filePath) {
+        this.currentSession.title = increment.titleUpdate;
+      }
     }
 
     // Process new requests (user prompts)
     if (increment.newRequestCount > 0) {
       this.totals.totalPrompts += increment.newRequestCount;
       this.totals.totalTurns += increment.newRequestCount;
+      if (this.currentSession?.filePath === filePath) {
+        this.currentSession.prompts += increment.newRequestCount;
+      }
       this.outputChannel.appendLine(`[Live] ${increment.newRequestCount} new request(s)`);
     }
 
@@ -367,12 +479,24 @@ export class SessionTracker implements vscode.Disposable {
       }
       this.totals.totalToolCallSuccesses += result.toolCallCount;
 
+      // Update current session stats
+      if (this.currentSession?.filePath === filePath) {
+        this.currentSession.responses++;
+        this.currentSession.promptTokens += result.promptTokens;
+        this.currentSession.outputTokens += result.outputTokens;
+        this.currentSession.toolCalls += result.toolCallCount;
+        this.currentSession.durationMs += result.totalElapsedMs;
+        for (const name of result.toolNames) {
+          this.currentSession.toolUsage[name] = (this.currentSession.toolUsage[name] ?? 0) + 1;
+        }
+      }
+
       this.outputChannel.appendLine(
         `[Live] Result: ${result.promptTokens} prompt + ${result.outputTokens} output tokens, ${result.toolCallCount} tool calls, ${(result.totalElapsedMs / 1000).toFixed(1)}s`
       );
     }
 
-    if (increment.newRequestCount > 0 || increment.completedResults.length > 0) {
+    if (increment.newRequestCount > 0 || increment.completedResults.length > 0 || increment.titleUpdate) {
       void this.persist();
       this._onDidUpdate.fire();
     }

@@ -100,9 +100,49 @@ async function showTotalsPanel(t: SessionTracker): Promise<void> {
   }
 
   const hasRealTokens = totals.totalPromptTokens + totals.totalOutputTokens > 0;
+  const cs = t.getCurrentSession();
 
-  const lines = [
-    `**Copilot Session Totals**`,
+  const lines: string[] = [];
+
+  // Current session section
+  if (cs) {
+    const csTokens = cs.promptTokens + cs.outputTokens;
+    const csModel = cs.model?.name ?? 'Unknown';
+    lines.push(
+      `**\u25B6 Current Session**`,
+      ``,
+      `| Metric | Value |`,
+      `|--------|-------|`,
+      `| Title | ${cs.title || 'Untitled'} |`,
+      `| Model | ${csModel} |`,
+      `| Prompts | ${cs.prompts} |`,
+      `| Responses | ${cs.responses} |`,
+      `| Tokens (total) | ${formatTokens(csTokens)} |`,
+      `| Tokens (input) | ${formatTokens(cs.promptTokens)} |`,
+      `| Tokens (output) | ${formatTokens(cs.outputTokens)} |`,
+      `| Tool Calls | ${cs.toolCalls} |`,
+      ``,
+    );
+
+    // Current session top tools
+    const csToolEntries = Object.entries(cs.toolUsage).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (csToolEntries.length > 0) {
+      lines.push(`**Current Session Tools**`);
+      lines.push(``);
+      lines.push(`| Tool | Calls |`);
+      lines.push(`|------|-------|`);
+      for (const [tool, count] of csToolEntries) {
+        lines.push(`| ${tool} | ${count} |`);
+      }
+      lines.push(``);
+    }
+
+    lines.push(`---`, ``);
+  }
+
+  // Totals section
+  lines.push(
+    `**All Sessions**`,
     ``,
     `| Metric | Value |`,
     `|--------|-------|`,
@@ -110,7 +150,7 @@ async function showTotalsPanel(t: SessionTracker): Promise<void> {
     `| Turns | ${totals.totalTurns} |`,
     `| Prompts | ${totals.totalPrompts} |`,
     `| Responses | ${totals.totalResponses} |`,
-  ];
+  );
 
   if (hasRealTokens) {
     lines.push(
