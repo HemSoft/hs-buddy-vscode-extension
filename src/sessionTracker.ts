@@ -238,18 +238,19 @@ export class SessionTracker implements vscode.Disposable {
   getStatusBarText(): string {
     const t = this.totals;
     if (t.totalSessions === 0) {
-      return '$(hs-buddy-icon) No sessions';
+      return '$(sparkle) No sessions';
     }
     const cs = this.currentSession;
-    if (cs) {
+    // Only show current session when it has meaningful data
+    if (cs && cs.prompts > 0) {
       const csTokens = cs.promptTokens + cs.outputTokens;
-      return `$(hs-buddy-icon) ${cs.prompts}p ${formatTokens(csTokens)} tok | All: ${t.totalSessions} sessions`;
+      return `$(sparkle) ${cs.prompts} prompt${cs.prompts !== 1 ? 's' : ''} · ${formatTokens(csTokens)} tokens | All: ${t.totalSessions} sessions`;
     }
     // Prefer real token counts, fall back to estimated
     const totalTokens = t.totalPromptTokens + t.totalOutputTokens > 0
       ? t.totalPromptTokens + t.totalOutputTokens
       : t.totalEstimatedTotalTokens;
-    return `$(hs-buddy-icon) ${t.totalSessions} sessions | ${formatTokens(totalTokens)} tokens`;
+    return `$(sparkle) ${t.totalSessions} sessions | ${formatTokens(totalTokens)} tokens`;
   }
 
   /** Status bar tooltip */
@@ -266,9 +267,9 @@ export class SessionTracker implements vscode.Disposable {
 
     const lines: string[] = [];
 
-    // Current session section
+    // Current session section — only show when it has at least one prompt
     const cs = this.currentSession;
-    if (cs) {
+    if (cs && cs.prompts > 0) {
       const csTokens = cs.promptTokens + cs.outputTokens;
       const csDur = formatDuration(cs.durationMs);
       const csModel = cs.model?.name ?? 'Unknown';
