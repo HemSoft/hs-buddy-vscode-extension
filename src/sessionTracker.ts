@@ -396,7 +396,12 @@ export class SessionTracker implements vscode.Disposable {
   }
 
   private loadTotals(): SessionTotals {
-    return this.globalState.get<SessionTotals>(TOTALS_KEY) ?? createEmptyTotals();
+    const stored = this.globalState.get<Partial<SessionTotals>>(TOTALS_KEY);
+    if (!stored) {
+      return createEmptyTotals();
+    }
+    // Merge with defaults so new fields added in later versions get zero instead of undefined
+    return { ...createEmptyTotals(), ...stored };
   }
 
   private loadRecentSessions(): CopilotSession[] {
