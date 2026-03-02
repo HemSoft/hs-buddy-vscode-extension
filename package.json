@@ -78,10 +78,22 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+    "lint:all": "npm run lint && npm run lint:md",
     "test": "vscode-test",
-    "package": "vsce package"
+    "package": "vsce package",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix"
+    ],
+    "*.md": [
+      "markdownlint-cli2"
+    ]
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.3",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
@@ -90,6 +102,10 @@
     "@vscode/test-electron": "^2.4.0",
     "@vscode/vsce": "^3.0.0",
     "eslint": "^9.0.0",
-    "typescript": "^5.5.0"
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.1",
+    "markdownlint-cli2": "^0.21.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.56.1"
   }
 }

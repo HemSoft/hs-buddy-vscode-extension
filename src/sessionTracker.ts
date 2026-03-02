@@ -355,7 +355,7 @@ export class SessionTracker implements vscode.Disposable {
   getExportData(): string {
     // Strip raw events from export to keep size manageable
     const exportSessions = this.recentSessions.map(s => {
-      const { events, ...rest } = s;
+      const { events: _events, ...rest } = s;
       return rest;
     });
 
