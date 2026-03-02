@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Copilot Dashboard** — rich webview panel with SVG bar charts, turn timeline, tool breakdown, model usage, and cost estimation
+- Dashboard command (`hs-buddy.showDashboard`) accessible from Command Palette and Quick Pick menu
+- Auto-refreshing dashboard that updates on new session data via `onDidUpdate` event
 - Current session stats in status bar, tooltip, and totals panel
 - Strict type-checked ESLint config (`strictTypeChecked` + `stylisticTypeChecked`)
 - Markdown linting with markdownlint-cli2

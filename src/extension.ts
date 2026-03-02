@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SessionTracker } from './sessionTracker';
 import { formatTokens } from './tokenEstimator';
+import { DashboardPanel } from './dashboardPanel';
 
 let tracker: SessionTracker;
 
@@ -40,6 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('hs-buddy.showMenu', async () => {
       const selection = await vscode.window.showQuickPick(
         [
+          { label: '$(graph) Dashboard', description: 'Open the Copilot Dashboard with charts and timeline', id: 'dashboard' },
           { label: '$(pulse) View Totals', description: 'See running totals across all sessions', id: 'totals' },
           { label: '$(history) Session History', description: 'Browse past sessions', id: 'sessionHistory' },
           { label: '$(sync) Scan Now', description: 'Scan for new Copilot sessions', id: 'scan' },
@@ -52,6 +54,9 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (selection) {
         switch (selection.id) {
+          case 'dashboard':
+            DashboardPanel.createOrShow(context.extensionUri, tracker);
+            break;
           case 'totals':
             await showTotalsPanel(tracker);
             break;
@@ -72,6 +77,13 @@ export function activate(context: vscode.ExtensionContext) {
             break;
         }
       }
+    })
+  );
+
+  // Dashboard command (also accessible from Command Palette)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hs-buddy.showDashboard', () => {
+      DashboardPanel.createOrShow(context.extensionUri, tracker);
     })
   );
 

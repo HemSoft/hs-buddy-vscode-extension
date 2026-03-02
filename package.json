@@ -54,6 +54,12 @@
         "icon": "$(hs-buddy-icon)"
       },
       {
+        "command": "hs-buddy.showDashboard",
+        "title": "Copilot Dashboard",
+        "category": "HemSoft Buddy",
+        "icon": "$(graph)"
+      },
+      {
         "command": "hs-buddy.helloWorld",
         "title": "Hello World",
         "category": "HemSoft Buddy"
