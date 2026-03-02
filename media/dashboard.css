@@ -169,6 +169,10 @@ body {
   color: var(--text-muted);
 }
 
+.cs-stat.premium .cs-val {
+  color: var(--accent-orange);
+}
+
 /* ─── KPI Cards ─────────────────────────────────────────── */
 
 .kpi-grid {
@@ -207,6 +211,10 @@ body {
 
 .kpi-card:hover::after {
   opacity: 1;
+}
+
+.kpi-card.premium .kpi-value {
+  color: var(--accent-orange);
 }
 
 .kpi-value {
@@ -435,6 +443,11 @@ body {
   border-radius: 3px;
   font-size: 10px;
   background: rgba(128,128,128,0.12);
+}
+
+.tl-premium {
+  color: var(--accent-orange);
+  font-weight: 500;
 }
 
 /* ─── Empty State ───────────────────────────────────────── */

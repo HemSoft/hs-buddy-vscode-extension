@@ -269,6 +269,7 @@ function parseChatSessionFile(filePath: string, workspaceHash: string): ChatSess
     promptTokens: totalPromptTokens,
     outputTokens: totalOutputTokens,
     source: 'chatSessions',
+    premiumRequests: increment.newRequestCount * (model?.multiplierNumeric ?? 1),
     linesAdded: 0,
     linesRemoved: 0,
     filesModified: 0,

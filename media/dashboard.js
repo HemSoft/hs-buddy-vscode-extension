@@ -35,12 +35,9 @@
     return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   }
 
-  /** Estimate cost: rough per-model pricing */
-  function estimateCost(promptTokens, outputTokens) {
-    // Claude Sonnet 4 pricing as default estimate ($/1M tokens)
-    const inputRate = 3.0;
-    const outputRate = 15.0;
-    return (promptTokens * inputRate + outputTokens * outputRate) / 1e6;
+  /** Cost based on premium requests at $0.04 each */
+  function premiumCost(premiumRequests) {
+    return premiumRequests * 0.04;
   }
 
   function escapeHtml(str) {
@@ -70,9 +67,10 @@
     const el = (id) => document.getElementById(id);
     const totalTokens = totals.promptTokens + totals.outputTokens || totals.estimatedTokens;
     el('kpiSessions').textContent = fmt(totals.sessions);
+    el('kpiPremium').textContent = fmt(totals.premiumRequests);
     el('kpiTokens').textContent = fmt(totalTokens);
     el('kpiTools').textContent = fmt(totals.toolCalls);
-    el('kpiCost').textContent = '$' + estimateCost(totals.promptTokens, totals.outputTokens).toFixed(2);
+    el('kpiCost').textContent = '$' + premiumCost(totals.premiumRequests).toFixed(2);
     el('kpiCode').textContent = '+' + fmt(totals.linesAdded) + ' / -' + fmt(totals.linesRemoved);
     el('kpiDuration').textContent = fmtDuration(totals.duration);
   }
@@ -93,6 +91,7 @@
     document.getElementById('csResponses').textContent = String(current.responses);
     document.getElementById('csTokens').textContent = fmt(current.promptTokens + current.outputTokens);
     document.getElementById('csTools').textContent = String(current.toolCalls);
+    document.getElementById('csPremium').textContent = current.premiumRequests + ' ($' + premiumCost(current.premiumRequests).toFixed(2) + ')';
     document.getElementById('csDuration').textContent = fmtDuration(current.duration);
 
     if (current.toolUsage && current.toolUsage.length > 0) {
@@ -178,6 +177,7 @@
       tooltip.innerHTML = `
         <div class="tt-title">${escapeHtml(s.title)}</div>
         <div class="tt-row"><span class="tt-label">Model</span><span>${escapeHtml(s.model)}</span></div>
+        <div class="tt-row"><span class="tt-label">Premium</span><span>${s.premiumRequests} ($${premiumCost(s.premiumRequests).toFixed(2)})</span></div>
         <div class="tt-row"><span class="tt-label">Prompt</span><span>${fmt(s.promptTokens)}</span></div>
         <div class="tt-row"><span class="tt-label">Output</span><span>${fmt(s.outputTokens)}</span></div>
         <div class="tt-row"><span class="tt-label">Total</span><span>${fmt(total)}</span></div>
@@ -242,6 +242,7 @@
           <div class="tl-meta">
             <span class="tl-tag">${escapeHtml(s.model)}</span>
             <span>${s.prompts}p ${s.turns}t</span>
+            <span class="tl-premium">${s.premiumRequests} premium</span>
             <span>${s.toolCalls} tools</span>
             <span>${fmtDuration(s.duration)}</span>
             ${s.linesAdded || s.linesRemoved ? `<span>+${s.linesAdded}/-${s.linesRemoved}</span>` : ''}

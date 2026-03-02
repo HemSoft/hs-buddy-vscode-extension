@@ -110,6 +110,7 @@ export class SessionTracker implements vscode.Disposable {
         outputTokens: s.outputTokens,
         toolCalls: s.toolCallCount,
         durationMs: s.durationMs,
+        premiumRequests: s.premiumRequests,
         toolUsage: {},
         filePath: latestSession.filePath,
       };
@@ -238,19 +239,18 @@ export class SessionTracker implements vscode.Disposable {
   getStatusBarText(): string {
     const t = this.totals;
     if (t.totalSessions === 0) {
-      return '$(sparkle) No sessions';
+      return '$(hs-buddy-icon) No sessions';
     }
     const cs = this.currentSession;
-    // Only show current session when it has meaningful data
-    if (cs && cs.prompts > 0) {
+    if (cs) {
       const csTokens = cs.promptTokens + cs.outputTokens;
-      return `$(sparkle) ${cs.prompts} prompt${cs.prompts !== 1 ? 's' : ''} · ${formatTokens(csTokens)} tokens | All: ${t.totalSessions} sessions`;
+      return `$(hs-buddy-icon) ${cs.prompts} prompt${cs.prompts !== 1 ? 's' : ''} · ${formatTokens(csTokens)} tokens | All: ${t.totalSessions} sessions`;
     }
     // Prefer real token counts, fall back to estimated
     const totalTokens = t.totalPromptTokens + t.totalOutputTokens > 0
       ? t.totalPromptTokens + t.totalOutputTokens
       : t.totalEstimatedTotalTokens;
-    return `$(sparkle) ${t.totalSessions} sessions | ${formatTokens(totalTokens)} tokens`;
+    return `$(hs-buddy-icon) ${t.totalSessions} sessions | ${formatTokens(totalTokens)} tokens`;
   }
 
   /** Status bar tooltip */
@@ -267,9 +267,9 @@ export class SessionTracker implements vscode.Disposable {
 
     const lines: string[] = [];
 
-    // Current session section — only show when it has at least one prompt
+    // Current session section
     const cs = this.currentSession;
-    if (cs && cs.prompts > 0) {
+    if (cs) {
       const csTokens = cs.promptTokens + cs.outputTokens;
       const csDur = formatDuration(cs.durationMs);
       const csModel = cs.model?.name ?? 'Unknown';
@@ -280,6 +280,7 @@ export class SessionTracker implements vscode.Disposable {
         cs.title || 'Untitled',
         `Model: ${csModel}`,
         `Prompts: ${cs.prompts} | Responses: ${cs.responses}`,
+        `Premium Requests: ${cs.premiumRequests}`,
         `Tokens: ${formatTokens(csTokens)} (in: ${formatTokens(cs.promptTokens)} | out: ${formatTokens(cs.outputTokens)})`,
         `Tool Calls: ${cs.toolCalls}`,
         `Duration: ${csDur}`,
@@ -296,6 +297,7 @@ export class SessionTracker implements vscode.Disposable {
       `\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`,
       `Sessions: ${t.totalSessions} | Turns: ${t.totalTurns}`,
       `Prompts: ${t.totalPrompts} | Responses: ${t.totalResponses}`,
+      `Premium Requests: ${t.totalPremiumRequests}`,
     );
 
     if (hasRealTokens) {
@@ -346,7 +348,7 @@ export class SessionTracker implements vscode.Disposable {
           : `~${formatTokens(s.estimatedTotalTokens)}`;
         return {
           label: `$(comment-discussion) ${s.title || 'Untitled'}`,
-          description: `${model} \u00B7 ${s.promptCount}p ${s.turnCount}t \u00B7 ${toolInfo} \u00B7 ${tokens} tok`,
+          description: `${model} \u00B7 ${s.promptCount}p ${s.turnCount}t \u00B7 ${s.premiumRequests} premium \u00B7 ${toolInfo} \u00B7 ${tokens} tok`,
           detail: `${date} ${time} \u00B7 ${duration} \u00B7 +${s.linesAdded}/-${s.linesRemoved} lines`,
         };
       });
@@ -423,6 +425,7 @@ export class SessionTracker implements vscode.Disposable {
         outputTokens: 0,
         toolCalls: 0,
         durationMs: 0,
+        premiumRequests: 0,
         toolUsage: {},
         filePath,
       };
@@ -442,6 +445,7 @@ export class SessionTracker implements vscode.Disposable {
         outputTokens: 0,
         toolCalls: 0,
         durationMs: 0,
+        premiumRequests: 0,
         toolUsage: {},
         filePath,
       };
@@ -457,12 +461,16 @@ export class SessionTracker implements vscode.Disposable {
 
     // Process new requests (user prompts)
     if (increment.newRequestCount > 0) {
+      const multiplier = this.currentSession.model?.multiplierNumeric ?? 1;
+      const premiumDelta = increment.newRequestCount * multiplier;
       this.totals.totalPrompts += increment.newRequestCount;
       this.totals.totalTurns += increment.newRequestCount;
+      this.totals.totalPremiumRequests += premiumDelta;
       if (this.currentSession.filePath === filePath) {
         this.currentSession.prompts += increment.newRequestCount;
+        this.currentSession.premiumRequests += premiumDelta;
       }
-      this.outputChannel.appendLine(`[Live] ${increment.newRequestCount} new request(s)`);
+      this.outputChannel.appendLine(`[Live] ${increment.newRequestCount} new request(s) (${premiumDelta} premium)`);
     }
 
     // Process completed results with real token counts
@@ -565,6 +573,7 @@ export class SessionTracker implements vscode.Disposable {
     this.totals.totalEstimatedTotalTokens += session.estimatedTotalTokens;
     this.totals.totalPromptTokens += session.promptTokens;
     this.totals.totalOutputTokens += session.outputTokens;
+    this.totals.totalPremiumRequests += session.premiumRequests;
     this.totals.totalLinesAdded += session.linesAdded;
     this.totals.totalLinesRemoved += session.linesRemoved;
     this.totals.totalFilesModified += session.filesModified;
@@ -650,6 +659,7 @@ function createEmptyTotals(): SessionTotals {
     totalEstimatedTotalTokens: 0,
     totalPromptTokens: 0,
     totalOutputTokens: 0,
+    totalPremiumRequests: 0,
     totalLinesAdded: 0,
     totalLinesRemoved: 0,
     totalFilesModified: 0,

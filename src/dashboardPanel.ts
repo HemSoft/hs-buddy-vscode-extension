@@ -91,6 +91,7 @@ export class DashboardPanel {
         prompts: s.promptCount,
         responses: s.responseCount,
         turns: s.turnCount,
+        premiumRequests: s.premiumRequests,
         startTime: s.startTime,
         source: s.source,
         linesAdded: s.linesAdded,
@@ -119,6 +120,7 @@ export class DashboardPanel {
           outputTokens: current.outputTokens,
           toolCalls: current.toolCalls,
           duration: current.durationMs,
+          premiumRequests: current.premiumRequests,
           toolUsage: Object.entries(current.toolUsage)
             .sort((a, b) => b[1] - a[1])
             .map(([name, count]) => ({ name, count })),
@@ -138,6 +140,7 @@ export class DashboardPanel {
         promptTokens: totals.totalPromptTokens,
         outputTokens: totals.totalOutputTokens,
         estimatedTokens: totals.totalEstimatedTotalTokens,
+        premiumRequests: totals.totalPremiumRequests,
         linesAdded: totals.totalLinesAdded,
         linesRemoved: totals.totalLinesRemoved,
         filesModified: totals.totalFilesModified,
@@ -202,6 +205,7 @@ export class DashboardPanel {
         <div class="cs-stat"><span class="cs-val" id="csResponses">0</span><span class="cs-label">Responses</span></div>
         <div class="cs-stat"><span class="cs-val" id="csTokens">0</span><span class="cs-label">Tokens</span></div>
         <div class="cs-stat"><span class="cs-val" id="csTools">0</span><span class="cs-label">Tool Calls</span></div>
+        <div class="cs-stat premium"><span class="cs-val" id="csPremium">0</span><span class="cs-label">Premium</span></div>
         <div class="cs-stat"><span class="cs-val" id="csDuration">0s</span><span class="cs-label">Duration</span></div>
       </div>
     </section>
@@ -211,6 +215,10 @@ export class DashboardPanel {
       <div class="kpi-card">
         <div class="kpi-value" id="kpiSessions">0</div>
         <div class="kpi-label">Sessions</div>
+      </div>
+      <div class="kpi-card premium">
+        <div class="kpi-value" id="kpiPremium">0</div>
+        <div class="kpi-label">Premium Requests</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-value" id="kpiTokens">0</div>

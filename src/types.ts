@@ -166,6 +166,9 @@ export interface CopilotSession {
   // Data source format
   source: 'chatSessions' | 'transcripts';
 
+  // Premium request tracking
+  premiumRequests: number;
+
   // Code stats (from session store enrichment)
   linesAdded: number;
   linesRemoved: number;
@@ -197,6 +200,7 @@ export interface SessionTotals {
   totalEstimatedTotalTokens: number;
   totalPromptTokens: number;
   totalOutputTokens: number;
+  totalPremiumRequests: number;
   totalLinesAdded: number;
   totalLinesRemoved: number;
   totalFilesModified: number;
@@ -220,6 +224,7 @@ export interface CurrentSessionStats {
   outputTokens: number;
   toolCalls: number;
   durationMs: number;
+  premiumRequests: number;
   toolUsage: Record<string, number>;
   filePath: string;
 }

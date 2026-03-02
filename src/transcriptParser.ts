@@ -324,6 +324,7 @@ function parseTranscriptFile(filePath: string, workspaceHash: string): CopilotSe
     promptTokens: 0,
     outputTokens: 0,
     source: 'transcripts',
+    premiumRequests: promptCount,
     linesAdded: 0,
     linesRemoved: 0,
     filesModified: 0,
