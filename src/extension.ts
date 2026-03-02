@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
   tracker.startWatcher();
 
   // Run initial scan on activation
-  void tracker.scan().then(count => {
+  void tracker.scan().then((count: number) => {
     if (count > 0) {
       outputChannel.appendLine(`Found ${count} new Copilot sessions.`);
     }
