@@ -29,8 +29,12 @@ if (!innerMatch) throw new Error('Could not parse SVG');
 const innerContent = innerMatch[1];
 
 // Original viewBox: 0 0 1708 1202
-// Make it square: 1708×1708, center vertically (shift Y by -253)
-const squareSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -253 1708 1708" fill="currentColor">${innerContent}</svg>`;
+// Make it square with ~15% padding on each side so the glyph doesn't fill
+// the full em-square (which causes clipping in VS Code's status bar).
+// Content is 1708 wide × 1202 tall. We use a 2200×2200 canvas:
+//   X offset: -(2200-1708)/2 = -246
+//   Y offset: -(2200-1202)/2 = -499
+const squareSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-246 -499 2200 2200" fill="currentColor">${innerContent}</svg>`;
 
 // Create SVG font
 const fontStream = new SVGIcons2SVGFontStream({
