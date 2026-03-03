@@ -70,33 +70,41 @@ export class DashboardPanel {
     const totals = this.tracker.getTotals();
     const current = this.tracker.getCurrentSession();
     const sessions = this.tracker.getRecentSessions();
+    const activationTime = this.tracker.getActivationTime();
 
-    // Build per-session data for charts
-    const sessionData = sessions
-      .sort((a, b) => b.startTime - a.startTime)
-      .slice(0, 30)
-      .reverse()
-      .map(s => ({
-        id: s.sessionId.substring(0, 8),
-        title: s.title || 'Untitled',
-        promptTokens: s.promptTokens,
-        outputTokens: s.outputTokens,
-        estimatedTotal: s.estimatedTotalTokens,
-        toolCalls: s.toolCallCount,
-        toolsUsed: s.toolsUsed,
-        duration: s.durationMs,
-        model: s.model?.name ?? 'Unknown',
-        modelFamily: s.model?.family ?? 'unknown',
-        multiplier: s.model?.multiplierNumeric ?? 1,
-        prompts: s.promptCount,
-        responses: s.responseCount,
-        turns: s.turnCount,
-        premiumRequests: s.premiumRequests,
-        startTime: s.startTime,
-        source: s.source,
-        linesAdded: s.linesAdded,
-        linesRemoved: s.linesRemoved,
-      }));
+    // Helper to map a CopilotSession to a serializable object
+    const mapSession = (s: (typeof sessions)[number]) => ({
+      id: s.sessionId.substring(0, 8),
+      sessionId: s.sessionId,
+      title: s.title || 'Untitled',
+      promptTokens: s.promptTokens,
+      outputTokens: s.outputTokens,
+      estimatedTotal: s.estimatedTotalTokens,
+      toolCalls: s.toolCallCount,
+      toolsUsed: s.toolsUsed,
+      duration: s.durationMs,
+      model: s.model?.name ?? 'Unknown',
+      modelFamily: s.model?.family ?? 'unknown',
+      multiplier: s.model?.multiplierNumeric ?? 1,
+      prompts: s.promptCount,
+      responses: s.responseCount,
+      turns: s.turnCount,
+      premiumRequests: s.premiumRequests,
+      startTime: s.startTime,
+      source: s.source,
+      linesAdded: s.linesAdded,
+      linesRemoved: s.linesRemoved,
+    });
+
+    // Split sessions into active (started since launch) and historical
+    const sorted = [...sessions].sort((a, b) => b.startTime - a.startTime);
+    const activeSessions = sorted
+      .filter(s => s.startTime >= activationTime)
+      .map(mapSession);
+    const historicalSessions = sorted
+      .filter(s => s.startTime < activationTime)
+      .slice(0, 50)
+      .map(mapSession);
 
     // Tool usage sorted
     const toolData = Object.entries(totals.toolUsage)
@@ -112,6 +120,7 @@ export class DashboardPanel {
     // Current session
     const currentData = current
       ? {
+          sessionId: current.sessionId,
           title: current.title || 'Untitled',
           model: current.model?.name ?? 'Unknown',
           prompts: current.prompts,
@@ -147,7 +156,8 @@ export class DashboardPanel {
         duration: totals.totalDuration,
       },
       current: currentData,
-      sessions: sessionData,
+      activeSessions,
+      historicalSessions,
       tools: toolData,
       models: modelData,
     });
@@ -193,59 +203,49 @@ export class DashboardPanel {
       <button class="refresh-btn" id="refreshBtn" title="Refresh">&#x21bb;</button>
     </header>
 
-    <!-- Current Session Banner -->
-    <section class="current-session" id="currentSession" style="display:none">
-      <div class="current-badge">LIVE</div>
-      <div class="current-info">
-        <span class="current-title" id="csTitle"></span>
-        <span class="current-model" id="csModel"></span>
-      </div>
-      <div class="current-stats">
-        <div class="cs-stat"><span class="cs-val" id="csPrompts">0</span><span class="cs-label">Prompts</span></div>
-        <div class="cs-stat"><span class="cs-val" id="csResponses">0</span><span class="cs-label">Responses</span></div>
-        <div class="cs-stat"><span class="cs-val" id="csTokens">0</span><span class="cs-label">Tokens</span></div>
-        <div class="cs-stat"><span class="cs-val" id="csTools">0</span><span class="cs-label">Tool Calls</span></div>
-        <div class="cs-stat premium"><span class="cs-val" id="csPremium">0</span><span class="cs-label">Premium</span></div>
-        <div class="cs-stat"><span class="cs-val" id="csDuration">0s</span><span class="cs-label">Duration</span></div>
-      </div>
+    <!-- Active Sessions (since launch) -->
+    <section class="panel session-panel" id="activePanel">
+      <h2>Active Sessions</h2>
+      <p class="section-hint" id="activeHint">Sessions started since this VS Code instance launched</p>
+      <div class="session-list" id="activeSessionList"></div>
     </section>
 
-    <!-- KPI Cards -->
-    <section class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-value" id="kpiSessions">0</div>
-        <div class="kpi-label">Sessions</div>
-      </div>
-      <div class="kpi-card premium">
-        <div class="kpi-value" id="kpiPremium">0</div>
-        <div class="kpi-label">Premium Requests</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-value" id="kpiTokens">0</div>
-        <div class="kpi-label">Total Tokens</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-value" id="kpiTools">0</div>
-        <div class="kpi-label">Tool Calls</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-value" id="kpiCost">$0.00</div>
-        <div class="kpi-label">Est. Cost</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-value" id="kpiCode">+0 / -0</div>
-        <div class="kpi-label">Lines Changed</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-value" id="kpiDuration">0m</div>
-        <div class="kpi-label">Total Duration</div>
-      </div>
+    <!-- Historical Sessions (from storage) -->
+    <section class="panel session-panel" id="historyPanel">
+      <h2>Session History</h2>
+      <p class="section-hint" id="historyHint">Previous sessions from storage</p>
+      <div class="session-list" id="historySessionList"></div>
     </section>
 
-    <!-- Token Chart -->
-    <section class="panel">
-      <h2>Token Usage by Session</h2>
-      <div class="chart-container" id="tokenChart"></div>
+    <!-- Aggregate Stats -->
+    <section class="panel" id="statsPanel">
+      <h2>Aggregate Totals</h2>
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpiSessions">0</div>
+          <div class="kpi-label">Sessions</div>
+        </div>
+        <div class="kpi-card premium">
+          <div class="kpi-value" id="kpiPremium">0</div>
+          <div class="kpi-label">Premium Requests</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpiTokens">0</div>
+          <div class="kpi-label">Total Tokens</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpiTools">0</div>
+          <div class="kpi-label">Tool Calls</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpiCost">$0.00</div>
+          <div class="kpi-label">Est. Cost</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpiDuration">0m</div>
+          <div class="kpi-label">Total Duration</div>
+        </div>
+      </div>
     </section>
 
     <!-- Two-column: Tools + Models -->
@@ -258,18 +258,6 @@ export class DashboardPanel {
         <h2>Model Usage</h2>
         <div class="bar-list" id="modelList"></div>
       </div>
-    </section>
-
-    <!-- Session Timeline -->
-    <section class="panel">
-      <h2>Recent Sessions</h2>
-      <div class="timeline" id="sessionTimeline"></div>
-    </section>
-
-    <!-- Current Session Tools -->
-    <section class="panel" id="csToolsPanel" style="display:none">
-      <h2>Current Session Tools</h2>
-      <div class="bar-list" id="csToolList"></div>
     </section>
 
   </div>

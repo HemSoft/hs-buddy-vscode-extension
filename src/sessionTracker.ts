@@ -31,6 +31,9 @@ export class SessionTracker implements vscode.Disposable {
   /** Current active session stats (the most recently updated chatSession) */
   private currentSession: CurrentSessionStats | null = null;
 
+  /** Timestamp when the extension activated — used to separate live vs historical sessions */
+  private readonly activationTime = Date.now();
+
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
   readonly onDidUpdate = this._onDidUpdate.event;
 
@@ -57,6 +60,11 @@ export class SessionTracker implements vscode.Disposable {
   /** Most recent sessions (up to MAX_RECENT_SESSIONS) */
   getRecentSessions(): CopilotSession[] {
     return this.recentSessions;
+  }
+
+  /** Timestamp when the extension activated */
+  getActivationTime(): number {
+    return this.activationTime;
   }
 
   /** Scan for new sessions across all workspaces */
