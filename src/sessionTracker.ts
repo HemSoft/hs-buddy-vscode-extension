@@ -239,18 +239,18 @@ export class SessionTracker implements vscode.Disposable {
   getStatusBarText(): string {
     const t = this.totals;
     if (t.totalSessions === 0) {
-      return '$(hs-buddy-icon) No sessions';
+      return '$(send) No sessions';
     }
     const cs = this.currentSession;
     if (cs) {
       const csTokens = cs.promptTokens + cs.outputTokens;
-      return `$(hs-buddy-icon) ${cs.prompts} prompt${cs.prompts !== 1 ? 's' : ''} · ${formatTokens(csTokens)} tokens | All: ${t.totalSessions} sessions`;
+      return `$(send) ${cs.prompts} prompt${cs.prompts !== 1 ? 's' : ''} · ${formatTokens(csTokens)} tokens | All: ${t.totalSessions} sessions`;
     }
     // Prefer real token counts, fall back to estimated
     const totalTokens = t.totalPromptTokens + t.totalOutputTokens > 0
       ? t.totalPromptTokens + t.totalOutputTokens
       : t.totalEstimatedTotalTokens;
-    return `$(hs-buddy-icon) ${t.totalSessions} sessions | ${formatTokens(totalTokens)} tokens`;
+    return `$(send) ${t.totalSessions} sessions | ${formatTokens(totalTokens)} tokens`;
   }
 
   /** Status bar tooltip */

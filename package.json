@@ -37,21 +37,12 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "icons": {
-      "hs-buddy-icon": {
-        "description": "HemSoft Buddy icon",
-        "default": {
-          "fontPath": "assets/fonts/hs-buddy-icons.woff2",
-          "fontCharacter": "\\EA01"
-        }
-      }
-    },
     "commands": [
       {
         "command": "hs-buddy.showMenu",
         "title": "Copilot Sessions",
         "category": "HemSoft Buddy",
-        "icon": "$(hs-buddy-icon)"
+        "icon": "$(send)"
       },
       {
         "command": "hs-buddy.showDashboard",
